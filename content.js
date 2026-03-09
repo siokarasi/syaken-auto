@@ -1,66 +1,64 @@
 function main() {
+    // 1. 正しいフレーム（pca0200が含まれるメイン画面）でのみ実行
+    if (!location.href.includes('pca0200.php')) return;
+
     chrome.storage.local.get(['isRunning', 'targetDate', 'targetRound', 'targetCount'], (config) => {
         if (!config.isRunning) return;
 
-        // 1. 確認画面(pca0201.php)にいる場合
-        if (location.href.includes('pca0201.php')) {
-            console.log("確認画面です。最終確定ボタンを探します。");
-            // 念のため自動で止まらないよう、ここで「登録」ボタン等を探してクリックする処理を追加可能
-            // 一旦、手動確認を挟む場合はここで通知を出すなどの処理が良いでしょう。
-            return;
-        }
+        console.log(`[監視中] 対象: ${config.targetDate} / ${config.targetRound}R`);
 
-        // 2. 予約入力画面(pca0200)にいる場合
-        console.log(`監視中: ${config.targetDate} の ${config.targetRound}ラウンド を狙っています...`);
-
+        // 2. 予約枠の解析
         const rows = document.querySelectorAll('.common-table tr');
         let targetInput = null;
 
         for (const row of rows) {
             const dateCell = row.cells[0];
             if (dateCell && dateCell.innerText.includes(config.targetDate)) {
-                // ラウンド1=cell[1], ラウンド2=cell[2]...
                 const roundIndex = parseInt(config.targetRound);
                 const cell = row.cells[roundIndex];
-                
-                if (cell) {
+                if (cell && cell.classList.contains('zan')) {
                     targetInput = cell.querySelector('input[type="text"]');
                 }
                 break;
             }
         }
 
+        // 3. 空きがあった場合の処理
         if (targetInput) {
-            // 【空き発見！】
-            console.log("🔥 空きを発見しました！入力して送信します。");
+            console.log("🔥 空き発見！入力を開始します。");
             targetInput.value = config.targetCount;
             
-            // 登録確認ボタンをクリック
             const submitBtn = document.querySelector('button[name="cmdsubmit"]');
             if (submitBtn) {
-                // 確実に送信するため少し待ってからクリック
+                chrome.storage.local.set({ isRunning: false }); // 重複防止
                 setTimeout(() => submitBtn.click(), 500);
-                // 監視をOFFにする（重複予約防止）
-                chrome.storage.local.set({ isRunning: false });
             }
-        } else {
-            // 【空きなし】表示更新ボタンを押す
-            console.log("空きがありません。更新します。");
-            const waitTime = Math.floor(Math.random() * 2000) + 3000; // 3-5秒
-
-            setTimeout(() => {
-                const updateBtn = document.querySelector('button[name="cmdselect"]');
-                if (updateBtn) {
-                    updateBtn.click();
-                } else {
-                    // ボタンが見つからない場合、再読み込み
-                    location.reload();
-                }
-            }, waitTime);
+            return;
         }
+
+        // 4. 空きがない場合の「表示更新」処理（ここを大幅強化）
+        const waitTime = Math.floor(Math.random() * 2000) + 3000;
+        console.log(`${waitTime / 1000}秒後に表示更新を実行します...`);
+
+        setTimeout(() => {
+            // ページ側の世界で定義されている submitform() を強制実行させる
+            // これにより、PHP側が期待するPOSTデータが正しく送信されます
+            const script = document.createElement('script');
+            script.textContent = `
+                if (typeof submitform === 'function') {
+                    submitform();
+                } else if (document.form1) {
+                    document.form1.submit();
+                }
+            `;
+            document.documentElement.appendChild(script);
+            script.remove();
+            
+            console.log("表示更新命令を送信しました。");
+        }, waitTime);
     });
 }
 
-// 起動トリガー
+// メッセージ待機と実行
 chrome.runtime.onMessage.addListener((msg) => { if (msg.action === "start") main(); });
 if (document.readyState === 'complete') main(); else window.addEventListener('load', main);
