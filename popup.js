@@ -1,38 +1,34 @@
+const elements = ['targetDate', 'targetRound', 'targetCount'];
+
 document.addEventListener('DOMContentLoaded', () => {
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const statusDisplay = document.getElementById('statusDisplay');
-
-    // 現在のステータスを表示
-    chrome.storage.local.get(['isRunning'], (result) => {
-        if (result.isRunning) {
-            statusDisplay.textContent = "現在の状態: 🟢 監視中";
-        } else {
-            statusDisplay.textContent = "現在の状態: 🔴 停止中";
-        }
+    // 保存されている設定を復元
+    chrome.storage.local.get(['isRunning', ...elements], (data) => {
+        elements.forEach(id => {
+            if (data[id]) document.getElementById(id).value = data[id];
+        });
+        updateStatus(data.isRunning);
     });
 
-    // 監視スタートボタン
-    startBtn.addEventListener('click', () => {
-        chrome.storage.local.set({ isRunning: true }, () => {
-            statusDisplay.textContent = "現在の状態: 🟢 監視中";
-            reloadActiveTab();
+    document.getElementById('startBtn').addEventListener('click', () => {
+        const settings = { isRunning: true };
+        elements.forEach(id => settings[id] = document.getElementById(id).value);
+        
+        chrome.storage.local.set(settings, () => {
+            updateStatus(true);
+            // ページをリロードせずにメッセージで開始（F5対策）
+            chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+                if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "start" });
+            });
         });
     });
 
-    // 停止ボタン
-    stopBtn.addEventListener('click', () => {
-        chrome.storage.local.set({ isRunning: false }, () => {
-            statusDisplay.textContent = "現在の状態: 🔴 停止中";
-        });
+    document.getElementById('stopBtn').addEventListener('click', () => {
+        chrome.storage.local.set({ isRunning: false }, () => updateStatus(false));
     });
-
-    // 現在のタブをリロードしてcontent.jsを再実行させる関数
-    function reloadActiveTab() {
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            if(tabs[0]) {
-                chrome.tabs.reload(tabs[0].id);
-            }
-        });
-    }
 });
+
+function updateStatus(isRunning) {
+    const s = document.getElementById('status');
+    s.textContent = isRunning ? "🟢 監視中" : "🔴 停止中";
+    s.className = `status ${isRunning ? 'running' : 'stopped'}`;
+}

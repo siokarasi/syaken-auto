@@ -1,18 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "車検予約自動化ツール（プロトタイプ）",
-  "version": "1.0",
-  "description": "空き枠を監視し、自動で表示更新を行います。",
-  "action": {
-    "default_popup": "popup.html"
-  },
-  "permissions": [
-    "storage"
-  ],
+  "name": "車検予約自動化ツール V2",
+  "version": "2.0",
+  "permissions": ["storage"],
+  "action": { "default_popup": "popup.html" },
   "content_scripts": [
     {
       "matches": ["*://ams-yoyaku.jp/*", "*://*.ams-yoyaku.jp/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "all_frames": true
     }
   ]
 }
