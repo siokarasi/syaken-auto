@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { width: 200px; padding: 10px; font-family: sans-serif; }
+    h3 { margin-top: 0; font-size: 14px; text-align: center; }
+    .status { font-weight: bold; text-align: center; margin: 15px 0; color: #333; }
+    button { width: 100%; padding: 10px; margin-bottom: 5px; cursor: pointer; font-weight: bold; }
+    #startBtn { background-color: #4CAF50; color: white; border: none; }
+    #stopBtn { background-color: #f44336; color: white; border: none; }
+  </style>
+</head>
+<body>
+  <h3>予約監視コントロール</h3>
+  <div class="status" id="statusDisplay">現在の状態: 停止中</div>
+  <button id="startBtn">監視スタート</button>
+  <button id="stopBtn">停止</button>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
