@@ -1,14 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "車検予約自動化ツール V2",
-  "version": "2.0",
+  "name": "車検予約自動化 V3",
+  "version": "3.0",
   "permissions": ["storage"],
   "action": { "default_popup": "popup.html" },
   "content_scripts": [
     {
       "matches": ["*://ams-yoyaku.jp/*", "*://*.ams-yoyaku.jp/*"],
-      "js": ["content.js"],
-      "all_frames": true
+      "js": ["content_isolated.js"],
+      "all_frames": true,
+      "world": "ISOLATED"
+    },
+    {
+      "matches": ["*://ams-yoyaku.jp/*", "*://*.ams-yoyaku.jp/*"],
+      "js": ["content_main.js"],
+      "all_frames": true,
+      "world": "MAIN"
     }
   ]
 }
