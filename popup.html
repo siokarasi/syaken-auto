@@ -3,39 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { width: 250px; padding: 10px; font-family: sans-serif; }
-    .field { margin-bottom: 10px; }
-    label { display: block; font-size: 12px; color: #666; }
-    input, select { width: 100%; padding: 5px; box-sizing: border-box; }
-    button { width: 100%; padding: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; border: none; color: white; }
-    #startBtn { background-color: #4CAF50; }
-    #stopBtn { background-color: #f44336; }
+    body { width: 380px; padding: 10px; font-family: sans-serif; }
+    h3 { margin-top: 0; font-size: 14px; text-align: center; }
     .status { text-align: center; font-weight: bold; margin: 10px 0; padding: 5px; border-radius: 4px; }
     .running { background-color: #e8f5e9; color: #2e7d32; }
     .stopped { background-color: #ffebee; color: #c62828; }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
+    th { background-color: #f0f0f0; border: 1px solid #ccc; padding: 4px; }
+    td { border: 1px solid #ccc; padding: 4px; }
+    .date-input { width: 85px; font-size: 11px; text-align: center; }
+    .cnt-input { width: 30px; text-align: center; }
+    .cell-wrap { display: flex; align-items: center; justify-content: center; gap: 2px; }
+    
+    button { width: 100%; padding: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; border: none; color: white; }
+    #startBtn { background-color: #4CAF50; }
+    #stopBtn { background-color: #f44336; }
   </style>
 </head>
 <body>
-  <h3>予約監視設定</h3>
+  <h3>複数枠 予約監視設定</h3>
   <div id="status" class="status stopped">停止中</div>
   
-  <div class="field">
-    <label>狙う日付 (例: 2026/03/10)</label>
-    <input type="text" id="targetDate" placeholder="2026/03/10">
-  </div>
-  <div class="field">
-    <label>狙うラウンド</label>
-    <select id="targetRound">
-      <option value="1">1ラウンド</option>
-      <option value="2">2ラウンド</option>
-      <option value="3">3ラウンド</option>
-      <option value="4">4ラウンド</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>希望台数</label>
-    <input type="number" id="targetCount" value="1" min="1">
-  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>日付 (例: 2026/03/10)</th><th>1R</th><th>2R</th><th>3R</th><th>4R</th>
+      </tr>
+    </thead>
+    <tbody id="targetTableBody">
+      </tbody>
+  </table>
 
   <button id="startBtn">監視スタート</button>
   <button id="stopBtn">停止</button>
