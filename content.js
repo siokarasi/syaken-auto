@@ -1,21 +1,20 @@
 function main() {
-    // 1. 正しいフレーム（pca0200が含まれるメイン画面）でのみ実行
-    if (!location.href.includes('pca0200.php')) return;
+    // pca0200.php が含まれるメインフレーム（mainフレーム）でのみ実行
+    if (!location.href.includes('pca0200')) return;
 
     chrome.storage.local.get(['isRunning', 'targetDate', 'targetRound', 'targetCount'], (config) => {
         if (!config.isRunning) return;
 
         console.log(`[監視中] 対象: ${config.targetDate} / ${config.targetRound}R`);
 
-        // 2. 予約枠の解析
+        // --- 1. 予約枠のチェック ---
         const rows = document.querySelectorAll('.common-table tr');
         let targetInput = null;
 
         for (const row of rows) {
-            const dateCell = row.cells[0];
-            if (dateCell && dateCell.innerText.includes(config.targetDate)) {
-                const roundIndex = parseInt(config.targetRound);
-                const cell = row.cells[roundIndex];
+            if (row.cells[0] && row.cells[0].innerText.includes(config.targetDate)) {
+                const roundIdx = parseInt(config.targetRound);
+                const cell = row.cells[roundIdx];
                 if (cell && cell.classList.contains('zan')) {
                     targetInput = cell.querySelector('input[type="text"]');
                 }
@@ -23,42 +22,59 @@ function main() {
             }
         }
 
-        // 3. 空きがあった場合の処理
+        // --- 2. 空きがあった場合：予約入力して送信 ---
         if (targetInput) {
-            console.log("🔥 空き発見！入力を開始します。");
+            console.log("🔥 空き発見！入力します。");
             targetInput.value = config.targetCount;
-            
             const submitBtn = document.querySelector('button[name="cmdsubmit"]');
             if (submitBtn) {
-                chrome.storage.local.set({ isRunning: false }); // 重複防止
+                chrome.storage.local.set({ isRunning: false });
                 setTimeout(() => submitBtn.click(), 500);
             }
             return;
         }
 
-        // 4. 空きがない場合の「表示更新」処理（ここを大幅強化）
+        // --- 3. 空きがない場合：キーエミュレーションで表示更新 ---
         const waitTime = Math.floor(Math.random() * 2000) + 3000;
-        console.log(`${waitTime / 1000}秒後に表示更新を実行します...`);
+        console.log(`${waitTime / 1000}秒後に「表示更新」をキー操作で実行します...`);
 
         setTimeout(() => {
-            // ページ側の世界で定義されている submitform() を強制実行させる
-            // これにより、PHP側が期待するPOSTデータが正しく送信されます
-            const script = document.createElement('script');
-            script.textContent = `
-                if (typeof submitform === 'function') {
-                    submitform();
-                } else if (document.form1) {
-                    document.form1.submit();
-                }
-            `;
-            document.documentElement.appendChild(script);
-            script.remove();
+            const updateBtn = document.querySelector('button[name="cmdselect"]');
             
-            console.log("表示更新命令を送信しました。");
+            if (updateBtn) {
+                console.log("ボタンにフォーカス（TAB相当）してENTERを送信します。");
+
+                // ① ボタンにフォーカスを当てる（TABキーで選択した状態にする）
+                updateBtn.focus();
+
+                // ② ENTERキーの「押し下げ(keydown)」と「離し(keyup)」イベントを作成
+                const keyConfig = {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true
+                };
+
+                const downEvent = new KeyboardEvent('keydown', keyConfig);
+                const upEvent = new KeyboardEvent('keyup', keyConfig);
+
+                // ③ イベントを順番に発行（これによりonclickが発火しやすくなります）
+                updateBtn.dispatchEvent(downEvent);
+                updateBtn.dispatchEvent(upEvent);
+
+                // 念のためクリックも同時並行で試行（CSPエラーにならない安全な方法）
+                updateBtn.click();
+            } else {
+                console.error("表示更新ボタンが見つかりません。");
+                // ボタンが見つからない場合はフレーム全体を強制更新
+                location.reload(); 
+            }
         }, waitTime);
     });
 }
 
-// メッセージ待機と実行
+// 起動処理
 chrome.runtime.onMessage.addListener((msg) => { if (msg.action === "start") main(); });
 if (document.readyState === 'complete') main(); else window.addEventListener('load', main);
