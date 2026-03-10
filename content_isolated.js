@@ -19,46 +19,27 @@ function checkAndRefresh() {
         if (config.phase === 'completed') {
             const securedCount = config.securedCount || 0;
             
-            // 左下に出現する控えめなフライアウト（トースト通知）を作成
             const flyout = document.createElement('div');
             flyout.style.cssText = `
-                position: fixed;
-                bottom: 20px;
-                left: 20px;
-                background-color: #323232;
-                color: #ffffff;
-                padding: 16px 24px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                z-index: 10000;
-                font-size: 15px;
-                font-family: sans-serif;
-                font-weight: bold;
-                opacity: 0;
-                transform: translateY(10px);
-                transition: all 0.4s ease;
-                pointer-events: none;
+                position: fixed; bottom: 20px; left: 20px; background-color: #323232; color: #ffffff;
+                padding: 16px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 10000; font-size: 15px; font-family: sans-serif; font-weight: bold;
+                opacity: 0; transform: translateY(10px); transition: all 0.4s ease; pointer-events: none;
             `;
             flyout.innerHTML = `✅ 自動予約: <span style="color: #4CAF50; font-size: 18px;">${securedCount}</span> 台確保しました`;
             
             if (document.body) {
                 document.body.appendChild(flyout);
-                
-                // 少し遅れてフワッと下から浮き上がるアニメーション
                 setTimeout(() => {
                     flyout.style.opacity = '1';
                     flyout.style.transform = 'translateY(0)';
                 }, 100);
-                
-                // 5秒後にフワッと消え、DOMからも削除
                 setTimeout(() => {
                     flyout.style.opacity = '0';
                     flyout.style.transform = 'translateY(10px)';
                     setTimeout(() => flyout.remove(), 400);
-                }, 3500);
+                }, 5000);
             }
-            
-            // プログラムを完全停止し、フラグを初期化
             chrome.storage.local.set({ isRunning: false, phase: 'idle', securedCount: 0 });
             return;
         }
@@ -75,11 +56,13 @@ function checkAndRefresh() {
                     console.log(`[手癖エミュレート] ⌨️ TABキーを 1 回打鍵 ⇨ [確定]ボタンにフォーカス`);
                     confirmBtn.focus();
                     
-                    console.log(`[手癖エミュレート] ⌨️ ENTERキーを打鍵して最速で確定します！`);
+                    console.log(`[手癖エミュレート] ⌨️ SPACEキーを打鍵して最速で確定します！`);
+                    // SPACEキーの物理的な打鍵のみをエミュレート
+                    confirmBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
+                    confirmBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
                     confirmBtn.click();
                 });
             } else {
-                console.error("確定ボタンが見つかりませんでした。");
                 chrome.storage.local.set({ isRunning: false, phase: 'idle' });
             }
             return;
@@ -151,18 +134,24 @@ function checkAndRefresh() {
             if (submitBtn) {
                 chrome.storage.local.set({ phase: 'confirm', securedCount: securedCount }, () => {
                     const remainingTabs = (allFocusableInputs.length - 1 - currentFocusIndex) + 1;
+                    
                     setTimeout(() => {
                         console.log(`[手癖エミュレート] ⌨️ TABキーを ${remainingTabs} 回打鍵 ⇨ [登録確認]ボタンにフォーカス`);
                         submitBtn.focus();
-                        console.log(`[手癖エミュレート] ⌨️ ENTERキーを打鍵してフォームを送信します`);
+                        
+                        console.log(`[手癖エミュレート] ⌨️ SPACEキーを打鍵してフォームを送信します`);
+                        // SPACEキーの物理的な打鍵のみをエミュレート
+                        submitBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
+                        submitBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
                         submitBtn.click();
-                    }, 500); 
+
+                    }, 800); 
                 });
             }
         } 
         // --- 空き枠がなかった場合（表示更新） ---
         else {
-            const waitTime = Math.floor(Math.random() * 1000) + 1000;
+            const waitTime = Math.floor(Math.random() * 1000) + 1500;
             console.log(`${waitTime / 1000}秒後に表示更新します...`);
             setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('DO_DISPLAY_UPDATE'));
