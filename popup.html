@@ -8,41 +8,38 @@
     .status { text-align: center; font-weight: bold; margin: 10px 0; padding: 5px; border-radius: 4px; }
     .running { background-color: #e8f5e9; color: #2e7d32; }
     .stopped { background-color: #ffebee; color: #c62828; }
-    
     .total-config { text-align: center; margin-bottom: 15px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; }
     .total-config input { width: 50px; text-align: center; font-size: 16px; font-weight: bold; margin: 0 5px; }
-    
     table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
     th { background-color: #f0f0f0; border: 1px solid #ccc; padding: 6px; }
     td { border: 1px solid #ccc; padding: 6px; }
     .chk { transform: scale(1.3); cursor: pointer; }
-    
-    button { width: 100%; padding: 10px; margin-top: 15px; cursor: pointer; font-weight: bold; border: none; color: white; }
-    #startBtn { background-color: #4CAF50; }
-    #stopBtn { background-color: #f44336; }
+    button { width: 100%; padding: 10px; margin-top: 8px; cursor: pointer; font-weight: bold; border: none; color: white; }
+    #startBtn { background-color: #4CAF50; margin-top: 15px; }
+    #stopTabBtn { background-color: #ff9800; }
+    #stopAllBtn { background-color: #f44336; }
+    .btn-group { display: flex; gap: 8px; }
   </style>
 </head>
 <body>
-  <h3>予約監視コントロール V4</h3>
+  <h3>予約監視コントロール V5 (独立マルチタブ版)</h3>
   <div id="status" class="status stopped">停止中</div>
-  
   <div class="total-config">
     全体で必要な確保台数: <input type="number" id="totalCount" value="1" min="1"> 台
   </div>
-
   <table>
     <thead>
       <tr>
         <th>表の行</th><th>1R</th><th>2R</th><th>3R</th><th>4R</th>
       </tr>
     </thead>
-    <tbody id="targetTableBody">
-      </tbody>
+    <tbody id="targetTableBody"></tbody>
   </table>
-
-  <button id="startBtn">監視スタート</button>
-  <button id="stopBtn">停止</button>
-
+  <button id="startBtn">このタブで監視スタート</button>
+  <div class="btn-group">
+    <button id="stopTabBtn">このタブ停止</button>
+    <button id="stopAllBtn">全タブ一斉停止</button>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
