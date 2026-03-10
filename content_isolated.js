@@ -55,7 +55,7 @@ function checkAndRefresh() {
                     flyout.style.opacity = '0';
                     flyout.style.transform = 'translateY(10px)';
                     setTimeout(() => flyout.remove(), 400);
-                }, 5000);
+                }, 3500);
             }
             
             // プログラムを完全停止し、フラグを初期化
@@ -162,7 +162,7 @@ function checkAndRefresh() {
         } 
         // --- 空き枠がなかった場合（表示更新） ---
         else {
-            const waitTime = Math.floor(Math.random() * 1000) + 1500;
+            const waitTime = Math.floor(Math.random() * 1000) + 1000;
             console.log(`${waitTime / 1000}秒後に表示更新します...`);
             setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('DO_DISPLAY_UPDATE'));
