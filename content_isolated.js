@@ -45,45 +45,51 @@ function checkAndRefresh() {
         }
 
         // ==========================================
-        // 【フェーズ2】確認画面(pca0101.php)での最終確定処理
+        // 【フェーズ2】確認画面での最終確定処理
         // ==========================================
-        if (location.href.includes('pca0101')) {
-            if (!config.isRunning) return;
-            console.log("【フェーズ2】確認画面(pca0101.php)を検知しました。待機時間ゼロで即時確定します！");
+        // 🌟 修正：URLは一切見ず、前の画面から渡された合図（confirm）だけを信じて実行する
+        if (config.isRunning && config.phase === 'confirm') {
+            console.log("【フェーズ2】確認画面フラグを検知しました。確定処理を実行します！");
             
             const buttons = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
             const confirmBtn = buttons.find(btn => btn.value === '登録' || btn.textContent.includes('登録')) || buttons[1];
             
             if (confirmBtn) {
-                // 🌟 最速化：ストレージへの保存を待たずに、即座にボタンを叩きに行く (Delay 0ms)
-                console.log(`[手癖の学習] ⌨️ TABキーを 2 回打鍵 ⇨ [登録]ボタンにフォーカス`);
-                confirmBtn.focus();
-                
-                console.log(`[手癖の学習] ⌨️ SPACEキーを打鍵して最速で確定します！`);
-                confirmBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-                confirmBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-                confirmBtn.click(); 
-
-                // 打鍵直後にバックグラウンドで状態を保存
-                chrome.storage.local.set({ isRunning: false, phase: 'completed' });
+                chrome.storage.local.set({ isRunning: false, phase: 'completed' }, () => {
+                    // ブラウザの準備を待つ最小限の150ms(0.15秒)
+                    setTimeout(() => {
+                        console.log(`[手癖の学習] ⌨️ TABキーを 2 回打鍵 ⇨ [登録]ボタンにフォーカス`);
+                        confirmBtn.focus();
+                        
+                        console.log(`[手癖の学習] ⌨️ SPACEキーを打鍵して最速で確定します！`);
+                        confirmBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
+                        confirmBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
+                        confirmBtn.click(); 
+                    }, 150);
+                });
+            } else {
+                console.error("「登録」ボタンが見つかりませんでした。");
+                chrome.storage.local.set({ isRunning: false, phase: 'idle' });
             }
-            return;
+            return; // フェーズ2を実行したらここで処理を終える
         }
 
         // ==========================================
-        // 【フェーズ1】予約画面(pca0200.php)の監視と入力
+        // 【フェーズ1】予約画面の監視と入力
         // ==========================================
-        if (location.href.includes('pca0200')) {
-            if (!config.isRunning) return; 
+        // 🌟 修正：URLは見ず、初期状態（idle）のときだけ実行する
+        if (config.isRunning && (!config.phase || config.phase === 'idle')) {
             if (!config.targets || config.targets.length === 0 || !config.totalCount) return;
 
             let remainingNeed = parseInt(config.totalCount, 10);
             let securedCount = 0; 
             let inputDone = false;
 
+            // 表が存在しないページでは動かさない
             const rows = document.querySelectorAll('.common-table tr');
+            if (!rows || rows.length === 0) return;
+
             const dataRows = Array.from(rows).filter(r => r.cells[0] && r.cells[0].innerText.match(/\d{4}\/\d{2}\/\d{2}/));
-            
             const allFocusableInputs = Array.from(document.querySelectorAll('.common-table input[type="text"]'));
             let currentFocusIndex = -1;
 
@@ -135,10 +141,11 @@ function checkAndRefresh() {
                 console.log("予約実行へ移行します...");
                 const submitBtn = document.querySelector('button[name="cmdsubmit"]');
                 if (submitBtn) {
+                    // 次の画面へ合図（confirm）を渡す
                     chrome.storage.local.set({ phase: 'confirm', securedCount: securedCount }, () => {
                         const remainingTabs = (allFocusableInputs.length - 1 - currentFocusIndex) + 1;
                         
-                        // 🌟 最速化：入力直後の待機時間を 800ms ⇨ 50ms（極限）に短縮
+                        // 入力後の限界待機 100ms(0.1秒)
                         setTimeout(() => {
                             console.log(`[手癖の学習] ⌨️ TABキーを ${remainingTabs} 回打鍵 ⇨ [登録確認]ボタンにフォーカス`);
                             submitBtn.focus();
@@ -153,7 +160,7 @@ function checkAndRefresh() {
             } 
             // --- 空き枠がなかった場合（表示更新） ---
             else {
-                // 🌟 最速化：更新待ち時間を 1000ms(1秒) 〜 1700ms(1.7秒) の間に変更
+                // 更新間隔：最速設定 1.0秒 〜 1.7秒
                 const waitTime = Math.floor(Math.random() * 700) + 1000;
                 console.log(`${waitTime / 1000}秒後に表示更新します...`);
                 
