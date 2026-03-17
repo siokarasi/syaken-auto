@@ -2,7 +2,7 @@
 // 1. 予約枠を監視して自動入力するメイン関数
 // ==========================================
 function checkAndRefresh() {
-    chrome.storage.local.get(['isRunning', 'targets', 'totalCount', 'phase', 'securedCount'], (config) => {
+    chrome.storage.local.get(['isRunning', 'targets', 'phase', 'securedCount', 'securedTotal', 'pendingSecuredTargets'], (config) => {
         
         // ==========================================
         // 🚨 安全装置（フェールセーフ）
@@ -17,7 +17,7 @@ function checkAndRefresh() {
         // 【フェーズ3】予約完了画面でのフライアウト表示
         // ==========================================
         if (config.phase === 'completed') {
-            const securedCount = config.securedCount || 0;
+            const securedTotal = config.securedTotal || 0;
             
             const flyout = document.createElement('div');
             flyout.style.cssText = `
@@ -26,7 +26,7 @@ function checkAndRefresh() {
                 z-index: 10000; font-size: 15px; font-family: sans-serif; font-weight: bold;
                 opacity: 0; transform: translateY(10px); transition: all 0.4s ease; pointer-events: none;
             `;
-            flyout.innerHTML = `✅ 自動予約: <span style="color: #4CAF50; font-size: 18px;">${securedCount}</span> 台確保しました`;
+            flyout.innerHTML = `✅ 自動予約: <span style="color: #4CAF50; font-size: 18px;">${securedTotal}</span> 台の確保目標を達成しました`;
             
             if (document.body) {
                 document.body.appendChild(flyout);
@@ -48,26 +48,65 @@ function checkAndRefresh() {
         // 【フェーズ2】確認画面での最終確定処理
         // ==========================================
         if (config.isRunning && config.phase === 'confirm') {
-            console.log("【フェーズ2】確認画面フラグを検知しました。確定処理を実行します！");
-            
+            const pendingSecuredTargets = Array.isArray(config.pendingSecuredTargets) ? config.pendingSecuredTargets : [];
+            const securedThisRound = pendingSecuredTargets.reduce((sum, t) => sum + parseInt(t.count || 0, 10), 0);
+            const securedTotal = parseInt(config.securedTotal || 0, 10) + securedThisRound;
+            const currentTargets = Array.isArray(config.targets) ? config.targets : [];
+
+            const securedMap = new Map();
+            pendingSecuredTargets.forEach(t => {
+                const key = `${t.rowIndex}_${t.round}`;
+                securedMap.set(key, (securedMap.get(key) || 0) + parseInt(t.count || 0, 10));
+            });
+
+            const updatedTargets = currentTargets
+                .map(t => {
+                    const key = `${t.rowIndex}_${t.round}`;
+                    const securedForTarget = securedMap.get(key) || 0;
+                    const nextCount = Math.max(0, parseInt(t.count || 0, 10) - securedForTarget);
+                    return { rowIndex: t.rowIndex, round: t.round, count: nextCount };
+                })
+                .filter(t => t.count > 0);
+
+            console.log(`【フェーズ2】確認画面に到達。今回確保: ${securedThisRound} 台 / 残りターゲット: ${updatedTargets.length} 件`);
+
             const buttons = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
-            const confirmBtn = buttons.find(btn => btn.value === '登録' || btn.textContent.includes('登録')) || buttons[1];
-            
-            if (confirmBtn) {
-                chrome.storage.local.set({ isRunning: false, phase: 'completed' }, () => {
+            const backBtn = buttons.find(btn => btn.value === '戻る' || btn.textContent.includes('戻る'));
+
+            if (updatedTargets.length === 0) {
+                chrome.storage.local.set({
+                    isRunning: false,
+                    phase: 'completed',
+                    targets: [],
+                    securedTotal: securedTotal,
+                    securedCount: 0,
+                    pendingSecuredTargets: []
+                });
+                return;
+            }
+
+            if (backBtn) {
+                chrome.storage.local.set({
+                    isRunning: true,
+                    phase: 'idle',
+                    targets: updatedTargets,
+                    securedTotal: securedTotal,
+                    securedCount: 0,
+                    pendingSecuredTargets: []
+                }, () => {
                     setTimeout(() => {
-                        console.log(`[KBエミュレーション] ⌨️ TABキーを 2 回打鍵 ⇨ [登録]ボタンにフォーカス`);
-                        confirmBtn.focus();
-                        
-                        console.log(`[KBエミュレーション] ⌨️ SPACEキーを打鍵して最速で確定します！`);
-                        confirmBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-                        confirmBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-                        confirmBtn.click(); 
-                    }, 150);
+                        console.log('[KBエミュレーション] ⌨️ TABキーを 1 回打鍵 ⇨ [戻る]ボタンにフォーカス');
+                        backBtn.focus();
+
+                        console.log('[KBエミュレーション] ⌨️ ENTERキーを打鍵して予約画面へ戻ります');
+                        backBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                        backBtn.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                        backBtn.click();
+                    }, 120);
                 });
             } else {
-                console.error("「登録」ボタンが見つかりませんでした。");
-                chrome.storage.local.set({ isRunning: false, phase: 'idle' });
+                console.error('「戻る」ボタンが見つかりませんでした。安全のため停止します。');
+                chrome.storage.local.set({ isRunning: false, phase: 'idle', targets: updatedTargets, securedTotal: securedTotal, securedCount: 0, pendingSecuredTargets: [] });
             }
             return;
         }
@@ -76,11 +115,27 @@ function checkAndRefresh() {
         // 【フェーズ1】予約画面の監視と入力
         // ==========================================
         if (config.isRunning && (!config.phase || config.phase === 'idle')) {
-            if (!config.targets || config.targets.length === 0 || !config.totalCount) return;
+            if (!config.targets || config.targets.length === 0) {
+                chrome.storage.local.set({ isRunning: false, phase: 'completed' });
+                return;
+            }
 
-            let remainingNeed = parseInt(config.totalCount, 10);
+            const targetMap = new Map();
+            config.targets.forEach(t => {
+                const need = parseInt(t.count || 0, 10);
+                if (need > 0) {
+                    targetMap.set(`${t.rowIndex}_${t.round}`, need);
+                }
+            });
+
+            if (targetMap.size === 0) {
+                chrome.storage.local.set({ isRunning: false, phase: 'completed' });
+                return;
+            }
+
             let securedCount = 0; 
             let inputDone = false;
+            const securedTargets = [];
 
             const rows = document.querySelectorAll('.common-table tr');
             if (!rows || rows.length === 0) return;
@@ -90,15 +145,12 @@ function checkAndRefresh() {
             let currentFocusIndex = -1;
 
             for (let i = 0; i < dataRows.length; i++) {
-                if (remainingNeed <= 0) break;
                 const row = dataRows[i];
 
-                const targetMatches = config.targets.filter(t => t.rowIndex === i);
-                if (targetMatches.length === 0) continue;
-
                 for (let r = 1; r <= 4; r++) {
-                    if (remainingNeed <= 0) break;
-                    if (!targetMatches.some(t => t.round === r)) continue;
+                    const key = `${i}_${r}`;
+                    const targetNeed = targetMap.get(key) || 0;
+                    if (targetNeed <= 0) continue;
 
                     const cell = row.cells[r];
                     if (!cell) continue;
@@ -110,7 +162,7 @@ function checkAndRefresh() {
                         if (cellText) availableCount = parseInt(cellText, 10);
 
                         // 🌟 修正：1セルあたり最大2台までに制限
-                        const takeCount = Math.min(remainingNeed, availableCount, 2);
+                        const takeCount = Math.min(targetNeed, availableCount, 2);
 
                         if (takeCount > 0) {
                             const targetIndex = allFocusableInputs.indexOf(input);
@@ -120,13 +172,14 @@ function checkAndRefresh() {
                             console.log(`[KBエミュレーション] ⌨️ TABキーを ${tabPresses} 回打鍵 ⇨ ${i+1}行目の ${r}R にフォーカス`);
                             input.focus(); 
                             input.value = takeCount;
-                            console.log(`[KBエミュレーション] ⌨️ 数字の [${takeCount}] を入力（残り ${remainingNeed - takeCount} 台必要）`);
+                            console.log(`[KBエミュレーション] ⌨️ 数字の [${takeCount}] を入力（${i + 1}行目 ${r}R の残り希望 ${targetNeed - takeCount} 台）`);
                             
                             input.dispatchEvent(new Event('input', { bubbles: true }));
                             input.dispatchEvent(new Event('change', { bubbles: true }));
 
-                            remainingNeed -= takeCount;
+                            targetMap.set(key, targetNeed - takeCount);
                             securedCount += takeCount; 
+                            securedTargets.push({ rowIndex: i, round: r, count: takeCount });
                             inputDone = true;
                         }
                     }
@@ -137,7 +190,7 @@ function checkAndRefresh() {
                 console.log("予約実行へ移行します...");
                 const submitBtn = document.querySelector('button[name="cmdsubmit"]');
                 if (submitBtn) {
-                    chrome.storage.local.set({ phase: 'confirm', securedCount: securedCount }, () => {
+                    chrome.storage.local.set({ phase: 'confirm', securedCount: securedCount, pendingSecuredTargets: securedTargets }, () => {
                         const remainingTabs = (allFocusableInputs.length - 1 - currentFocusIndex) + 1;
                         
                         setTimeout(() => {
@@ -177,7 +230,7 @@ function checkAndRefresh() {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === "start") {
-        chrome.storage.local.set({ phase: 'idle', securedCount: 0 }, () => {
+        chrome.storage.local.set({ phase: 'idle', securedCount: 0, securedTotal: 0, pendingSecuredTargets: [] }, () => {
             checkAndRefresh();
         });
     }

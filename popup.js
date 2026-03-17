@@ -1,25 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById('targetTableBody');
 
-    // 予約表に合わせて「4行分」のチェックボックスを作成
+    // 予約表に合わせて「4行分」の台数入力欄を作成
     for (let i = 0; i < 4; i++) {
         let tr = document.createElement('tr');
         let html = `<td>上から <b>${i + 1}</b> 行目</td>`;
         for (let r = 1; r <= 4; r++) {
-            html += `<td><input type="checkbox" id="chk_${i}_${r}" class="chk"></td>`;
+            html += `<td><input type="number" id="qty_${i}_${r}" class="qty" min="0" value="0"></td>`;
         }
         tr.innerHTML = html;
         tbody.appendChild(tr);
     }
 
     // 保存されている設定を復元
-    chrome.storage.local.get(['isRunning', 'targets', 'totalCount'], (data) => {
-        if (data.totalCount) document.getElementById('totalCount').value = data.totalCount;
-        
+    chrome.storage.local.get(['isRunning', 'targets'], (data) => {
         if (data.targets && Array.isArray(data.targets)) {
             data.targets.forEach(t => {
-                const chk = document.getElementById(`chk_${t.rowIndex}_${t.round}`);
-                if (chk) chk.checked = true;
+                const qty = document.getElementById(`qty_${t.rowIndex}_${t.round}`);
+                if (qty) qty.value = Math.max(0, parseInt(t.count || 0, 10));
             });
         }
         updateStatus(data.isRunning);
@@ -28,17 +26,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // スタートボタン
     document.getElementById('startBtn').addEventListener('click', () => {
         const targets = [];
-        const totalCount = parseInt(document.getElementById('totalCount').value, 10);
-        
+
         for (let i = 0; i < 4; i++) {
             for (let r = 1; r <= 4; r++) {
-                if (document.getElementById(`chk_${i}_${r}`).checked) {
-                    targets.push({ rowIndex: i, round: r });
+                const qty = parseInt(document.getElementById(`qty_${i}_${r}`).value || '0', 10);
+                if (qty > 0) {
+                    targets.push({ rowIndex: i, round: r, count: qty });
                 }
             }
         }
 
-        chrome.storage.local.set({ isRunning: true, targets: targets, totalCount: totalCount }, () => {
+        if (targets.length === 0) {
+            alert('希望台数を1つ以上入力してください。');
+            return;
+        }
+
+        chrome.storage.local.set({ isRunning: true, targets: targets }, () => {
             updateStatus(true);
             chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
                 if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "start" });
