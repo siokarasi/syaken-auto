@@ -2,7 +2,7 @@
 // 1. 予約枠を監視して自動入力するメイン関数
 // ==========================================
 function checkAndRefresh() {
-    chrome.storage.local.get(['isRunning', 'targets', 'phase', 'securedCount', 'securedTotal', 'pendingSecuredTargets'], (config) => {
+    chrome.storage.local.get(['isRunning', 'targets', 'phase', 'securedCount', 'securedTotal', 'pendingSecuredTargets', 'vehicleTypeValue', 'inspectionTypeValue'], (config) => {
         
         // ==========================================
         // 🚨 安全装置（フェールセーフ）
@@ -45,6 +45,30 @@ function checkAndRefresh() {
         }
 
         // ==========================================
+        // 【フェーズ0】車種・検査種別を選択して予約受付画面へ遷移
+        // ==========================================
+        if (config.isRunning && (!config.phase || config.phase === 'idle')) {
+            const selectionControls = findSelectionControls();
+            if (selectionControls && !hasReservationDataRows()) {
+                const changed = applySelectionValue(selectionControls.vehicleSelect, config.vehicleTypeValue)
+                    || applySelectionValue(selectionControls.inspectionSelect, config.inspectionTypeValue);
+
+                if (changed) {
+                    console.log('【フェーズ0】車種・検査種別を自動選択しました。');
+                }
+
+                if (selectionControls.refreshBtn) {
+                    setTimeout(() => {
+                        console.log('【フェーズ0】表示更新を実行して予約受付画面へ進みます。');
+                        selectionControls.refreshBtn.focus();
+                        selectionControls.refreshBtn.click();
+                    }, 120);
+                }
+                return;
+            }
+        }
+
+        // ==========================================
         // 【フェーズ2】確認画面での最終確定処理
         // ==========================================
         if (config.isRunning && config.phase === 'confirm') {
@@ -71,7 +95,11 @@ function checkAndRefresh() {
             console.log(`【フェーズ2】確認画面に到達。今回確保: ${securedThisRound} 台 / 残りターゲット: ${updatedTargets.length} 件`);
 
             const buttons = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
-            const backBtn = buttons.find(btn => btn.value === '戻る' || btn.textContent.includes('戻る'));
+            const backBtn = buttons.find(btn => {
+                const valueText = (btn.value || '').trim();
+                const bodyText = (btn.textContent || '').trim();
+                return /戻る|前画面|前へ|予約受付へ|back/i.test(valueText) || /戻る|前画面|前へ|予約受付へ|back/i.test(bodyText);
+            });
 
             if (updatedTargets.length === 0) {
                 chrome.storage.local.set({
@@ -79,6 +107,7 @@ function checkAndRefresh() {
                     phase: 'completed',
                     targets: [],
                     securedTotal: securedTotal,
+                    lastSecuredCount: securedThisRound,
                     securedCount: 0,
                     pendingSecuredTargets: []
                 });
@@ -91,12 +120,15 @@ function checkAndRefresh() {
                     phase: 'idle',
                     targets: updatedTargets,
                     securedTotal: securedTotal,
+                    lastSecuredCount: securedThisRound,
                     securedCount: 0,
                     pendingSecuredTargets: []
                 }, () => {
                     setTimeout(() => {
                         console.log('[KBエミュレーション] ⌨️ TABキーを 1 回打鍵 ⇨ [戻る]ボタンにフォーカス');
-                        backBtn.focus();
+                        if (typeof backBtn.focus === 'function') {
+                            backBtn.focus();
+                        }
 
                         console.log('[KBエミュレーション] ⌨️ ENTERキーを打鍵して予約画面へ戻ります');
                         backBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
@@ -106,7 +138,7 @@ function checkAndRefresh() {
                 });
             } else {
                 console.error('「戻る」ボタンが見つかりませんでした。安全のため停止します。');
-                chrome.storage.local.set({ isRunning: false, phase: 'idle', targets: updatedTargets, securedTotal: securedTotal, securedCount: 0, pendingSecuredTargets: [] });
+                chrome.storage.local.set({ isRunning: false, phase: 'idle', targets: updatedTargets, securedTotal: securedTotal, lastSecuredCount: securedThisRound, securedCount: 0, pendingSecuredTargets: [] });
             }
             return;
         }
@@ -229,15 +261,126 @@ function checkAndRefresh() {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === 'getSelectionOptions') {
+        cacheSelectionOptionsToStorage();
+        const options = getSelectionOptions();
+        sendResponse({
+            ok: true,
+            vehicleOptions: options.vehicleOptions,
+            inspectionOptions: options.inspectionOptions
+        });
+        return;
+    }
+
+    if (msg.action === 'requestSelectionCacheRefresh') {
+        cacheSelectionOptionsToStorage();
+        sendResponse({ ok: true });
+        return;
+    }
+
     if (msg.action === "start") {
-        chrome.storage.local.set({ phase: 'idle', securedCount: 0, securedTotal: 0, pendingSecuredTargets: [] }, () => {
+        chrome.storage.local.set({ phase: 'idle', securedCount: 0, securedTotal: 0, lastSecuredCount: 0, pendingSecuredTargets: [] }, () => {
             checkAndRefresh();
         });
+        return;
     }
 });
 
 if (document.readyState === 'complete') {
+    cacheSelectionOptionsToStorage();
     checkAndRefresh();
 } else {
-    window.addEventListener('load', checkAndRefresh);
+    window.addEventListener('load', () => {
+        cacheSelectionOptionsToStorage();
+        checkAndRefresh();
+    });
+}
+
+function findSelectionControls() {
+    const allSelects = Array.from(document.querySelectorAll('select')).filter(isVisibleElement);
+    if (allSelects.length < 2) return null;
+
+    const vehicleSelect =
+        document.querySelector('select[name="pINSPECTCD"]')
+        || allSelects[0];
+
+    const inspectionSelect =
+        allSelects.find(s => s !== vehicleSelect)
+        || allSelects[1];
+
+    if (!vehicleSelect || !inspectionSelect) return null;
+
+    const refreshCandidates = Array.from(document.querySelectorAll('button[name="cmdselect"], input[name="cmdselect"], button, input[type="button"], input[type="submit"]'));
+    const refreshBtn = refreshCandidates.find(btn => {
+        const valueText = (btn.value || '').trim();
+        const bodyText = (btn.textContent || '').trim();
+        return /表示更新|更新|search|submit/i.test(valueText) || /表示更新|更新|search|submit/i.test(bodyText);
+    }) || document.querySelector('button[name="cmdselect"], input[name="cmdselect"]');
+
+    return { vehicleSelect, inspectionSelect, refreshBtn };
+}
+
+function getSelectionOptions() {
+    const controls = findSelectionControls();
+    if (!controls) {
+        return {
+            vehicleOptions: [{ value: '', label: '変更しない' }],
+            inspectionOptions: [{ value: '', label: '変更しない' }]
+        };
+    }
+
+    return {
+        vehicleOptions: extractSelectOptions(controls.vehicleSelect),
+        inspectionOptions: extractSelectOptions(controls.inspectionSelect)
+    };
+}
+
+function extractSelectOptions(selectNode) {
+    const options = [{ value: '', label: '変更しない' }];
+    Array.from(selectNode.options || []).forEach(opt => {
+        options.push({ value: String(opt.value || ''), label: String((opt.textContent || '').trim() || opt.value || '') });
+    });
+    return options;
+}
+
+function applySelectionValue(selectNode, value) {
+    if (!selectNode || value === undefined || value === null || value === '') return false;
+
+    const target = String(value);
+    const matched = Array.from(selectNode.options || []).some(opt => String(opt.value) === target);
+    if (!matched) return false;
+
+    if (String(selectNode.value) === target) return false;
+
+    selectNode.value = target;
+    selectNode.dispatchEvent(new Event('change', { bubbles: true }));
+    selectNode.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+}
+
+function isVisibleElement(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && !el.disabled;
+}
+
+function hasReservationDataRows() {
+    const rows = Array.from(document.querySelectorAll('.common-table tr'));
+    return rows.some(r => r.cells && r.cells[0] && /\d{4}\/\d{2}\/\d{2}/.test(r.cells[0].innerText || ''));
+}
+
+function cacheSelectionOptionsToStorage() {
+    const controls = findSelectionControls();
+    if (!controls) return;
+
+    const vehicleOptions = extractSelectOptions(controls.vehicleSelect);
+    const inspectionOptions = extractSelectOptions(controls.inspectionSelect);
+    if (vehicleOptions.length <= 1 || inspectionOptions.length <= 1) return;
+
+    chrome.storage.local.set({
+        selectionOptions: {
+            vehicleOptions: vehicleOptions,
+            inspectionOptions: inspectionOptions
+        }
+    });
 }

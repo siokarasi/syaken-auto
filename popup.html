@@ -10,6 +10,11 @@
     .stopped { background-color: #ffebee; color: #c62828; }
 
     .hint { margin-bottom: 12px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; font-size: 11px; line-height: 1.5; }
+    .stats { margin-bottom: 12px; padding: 8px; background: #eef6ff; border: 1px solid #c9defa; font-size: 12px; line-height: 1.6; }
+    .stats b { color: #124a8a; }
+    .selection-config { margin-bottom: 12px; padding: 8px; background: #fff8e1; border: 1px solid #eed796; font-size: 12px; }
+    .selection-config label { display: block; margin-bottom: 8px; }
+    .selection-config select { width: 100%; margin-top: 4px; }
     
     table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
     th { background-color: #f0f0f0; border: 1px solid #ccc; padding: 6px; }
@@ -27,6 +32,22 @@
 
   <div class="hint">
     各行・各ラウンドごとに希望台数を入力してください（0 は対象外）。
+  </div>
+
+  <div class="stats">
+    開始後の累計獲得台数: <b><span id="securedTotalDisplay">0</span></b> 台<br>
+    前回の予約周回での獲得台数: <b><span id="lastSecuredDisplay">0</span></b> 台
+  </div>
+
+  <div class="selection-config">
+    <label>
+      車種選択
+      <select id="vehicleTypeSelect"></select>
+    </label>
+    <label>
+      検査種別
+      <select id="inspectionTypeSelect"></select>
+    </label>
   </div>
 
   <table>
